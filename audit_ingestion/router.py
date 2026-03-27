@@ -19,6 +19,7 @@ from .extractor import extract
 from .normalizers import normalize_evidence
 
 logger = logging.getLogger(__name__)
+ROUTER_BUILD = "v04.3-providerfix-1"
 
 # ── Throttle semaphores ───────────────────────────────────────────────────────
 # Shared across all threads in the process — conservative caps for stability
@@ -223,6 +224,15 @@ def ingest_one(
     stage_timings["total"] = round(
         sum(v for v in stage_timings.values()), 3
     )
+
+    # If AI was unavailable or failed but we have usable extracted text, mark PARTIAL not FAILED
+    # A file with good text is still useful — auditor can read raw text even without canonical JSON
+    ai_unavailable = any(f.type in ("canonical_failed", "no_ai") for f in evidence.flags)
+    has_text = (evidence.extraction_meta.total_chars or 0) >= 200
+
+    if ai_unavailable and has_text and score < 0.30:
+        score = 0.30  # Floor to PARTIAL when extraction succeeded but AI was unavailable
+        evidence.extraction_meta.overall_confidence = score
 
     status = "success" if score >= 0.70 else ("partial" if score >= 0.30 else "failed")
 

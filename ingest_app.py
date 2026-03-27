@@ -15,6 +15,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+BUILD_VERSION = "v04.3-providerfix-1"
+
 st.set_page_config(
     page_title="Audit Ingestion v04.2",
     page_icon="📋",
@@ -220,6 +222,7 @@ with st.sidebar:
         ),
     )
     st.caption(f"Model: `gpt-5.4` | Mode: `{mode}`")
+    st.caption(f"Build: `{BUILD_VERSION}`")
 
     st.markdown("---")
     st.markdown("### 📋 v04.2 Architecture")
