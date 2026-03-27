@@ -1,0 +1,5 @@
+tesseract-ocr
+tesseract-ocr-eng
+fonts-dejavu-core
+fonts-liberation
+poppler-utils
