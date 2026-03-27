@@ -1,12 +1,16 @@
 """
-audit_ingestion_v04/audit_ingestion/providers/openai_provider.py
+audit_ingestion_v04.2/audit_ingestion/providers/openai_provider.py
 OpenAI provider — Responses API + Structured Outputs.
 
 Model constants — change here only:
   CANONICAL_MODEL      = "gpt-5.4"       canonical structured extraction
   VISION_MODEL         = "gpt-5.4"       weak-page vision transcription
-  RESCUE_MODEL         = "gpt-5.4-pro"   optional manual rescue (future)
+  RESCUE_MODEL         = "gpt-5.4-pro"   optional manual rescue only
   DEFAULT_MODEL        = CANONICAL_MODEL
+
+NOTE: If gpt-5.4 is not yet available on your account, the API will return a
+clear model-not-found error. Swap CANONICAL_MODEL to "gpt-4o" temporarily.
+The Responses API format is identical regardless of model.
 """
 from __future__ import annotations
 import base64
@@ -21,7 +25,7 @@ from .base import AIProvider
 
 logger = logging.getLogger(__name__)
 
-# ── Model constants ───────────────────────────────────────────────────────────
+# ── Model constants — change ONLY here ───────────────────────────────────────
 CANONICAL_MODEL = "gpt-5.4"
 VISION_MODEL    = "gpt-5.4"
 RESCUE_MODEL    = "gpt-5.4-pro"
@@ -56,7 +60,12 @@ class OpenAIProvider(AIProvider):
     ) -> str:
         """
         Call OpenAI Responses API.
-        Uses structured outputs when json_schema is provided.
+        Uses structured outputs (json_schema format) when json_schema is provided.
+        The Responses API requires:
+          text.format.type = "json_schema"
+          text.format.name = <schema name>       ← required, separate from json_schema dict
+          text.format.schema = <the schema dict>
+          text.format.strict = True
         Returns raw response text.
         """
         m = model or self.model
@@ -72,15 +81,22 @@ class OpenAIProvider(AIProvider):
         )
 
         if json_schema:
+            # Responses API structured output format:
+            # name and strict go at the format level, NOT inside the schema dict
+            schema_name   = json_schema.get("name", "audit_evidence")
+            schema_strict = json_schema.get("strict", True)
+            schema_body   = json_schema.get("schema", json_schema)  # unwrap if wrapped
+
             kwargs["text"] = {
                 "format": {
-                    "type": "json_schema",
-                    "json_schema": json_schema,
+                    "type":   "json_schema",
+                    "name":   schema_name,       # required by Responses API
+                    "strict": schema_strict,
+                    "schema": schema_body,
                 }
             }
 
         resp = self.client.responses.create(**kwargs)
-        # Responses API returns output_text directly
         return resp.output_text or ""
 
     # ── Structured canonical extraction ──────────────────────────────────────
@@ -95,6 +111,7 @@ class OpenAIProvider(AIProvider):
     ) -> dict:
         """
         Extract structured JSON via Responses API + Structured Outputs.
+        Uses CANONICAL_MODEL. Never uses RESCUE_MODEL.
         Returns validated dict. Raises on failure.
         """
         raw = self._responses_call(
@@ -120,20 +137,20 @@ class OpenAIProvider(AIProvider):
         """
         Send page images to VISION_MODEL and extract text.
         Uses Responses API with image inputs.
+        Also used by rescue path with RESCUE_MODEL.
         """
         if not images:
             return ""
 
         m = model or VISION_MODEL
 
-        # Build image content blocks
         content: list[dict] = []
         for img_bytes in images[:8]:
             b64 = base64.b64encode(img_bytes).decode()
             content.append({
-                "type": "input_image",
+                "type":      "input_image",
                 "image_url": f"data:image/jpeg;base64,{b64}",
-                "detail": "high",
+                "detail":    "high",
             })
         content.append({"type": "input_text", "text": prompt})
 
@@ -149,7 +166,7 @@ class OpenAIProvider(AIProvider):
         pdf_bytes: bytes,
         max_pages: int = 2,
     ) -> str:
-        """Convert PDF pages to images and extract via vision. Used as last-resort fallback."""
+        """Convert PDF pages to images and extract via vision. Last-resort fallback."""
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp.write(pdf_bytes)
             tmp_path = tmp.name

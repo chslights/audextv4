@@ -1,5 +1,5 @@
 """
-audit_ingestion_v04/audit_ingestion/legacy.py
+audit_ingestion_v04.2/audit_ingestion/legacy.py
 Compatibility layer — derives legacy field dict from canonical AuditEvidence.
 Never the primary output. Useful for downstream systems expecting the old format.
 """

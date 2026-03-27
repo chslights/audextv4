@@ -1,5 +1,5 @@
 """
-audit_ingestion_v04/audit_ingestion/extractor.py
+audit_ingestion_v04.2/audit_ingestion/extractor.py
 Page-aware extraction engine with fast/deep lane split.
 
 Fast Review (extract_fast):
@@ -187,7 +187,8 @@ def _ocr_page(fitz_doc, page_index: int, dpi: int = 250,
 
 # ── Vision — render page images ───────────────────────────────────────────────
 
-def _render_page_images(fitz_doc, page_indices: list[int], dpi: int = 150) -> list[bytes]:
+def _render_page_images(fitz_doc, page_indices: list[int],
+                        dpi: int = 150, file_hash: str | None = None) -> list[bytes]:
     images: list[bytes] = []
     try:
         from PIL import Image
@@ -195,22 +196,72 @@ def _render_page_images(fitz_doc, page_indices: list[int], dpi: int = 150) -> li
         for idx in page_indices:
             if idx >= len(fitz_doc):
                 continue
+
+            cache_key = f"{file_hash}:{idx}:{dpi}" if file_hash else None
+            if cache_key and cache_key in _image_page_cache:
+                images.append(_image_page_cache[cache_key])
+                continue
+
             page = fitz_doc[idx]
             pix = page.get_pixmap(dpi=dpi, alpha=False)
             mode = "RGB" if pix.n < 4 else "RGBA"
             img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
             buf = _io.BytesIO()
             img.save(buf, format="JPEG", quality=85)
-            images.append(buf.getvalue())
+            data = buf.getvalue()
+            if cache_key:
+                _image_page_cache[cache_key] = data
+            images.append(data)
     except Exception as e:
         logger.warning(f"Page render failed: {e}")
     return images
+
+
+def render_page_image_cached(path: str, page_index: int, dpi: int = 200) -> bytes:
+    """
+    Render a single PDF page to JPEG bytes.
+    Cached by file hash + page index + dpi.
+    Used by rescue path in router — independent of shared fitz handle.
+    """
+    file_hash = _file_hash(path)
+    cache_key = f"{file_hash}:{page_index}:{dpi}"
+    if cache_key in _image_page_cache:
+        return _image_page_cache[cache_key]
+
+    try:
+        import fitz
+        import io as _io
+        from PIL import Image
+    except ImportError:
+        return b""
+
+    doc = None
+    try:
+        doc = fitz.open(path)
+        page = doc[page_index]
+        pix = page.get_pixmap(dpi=dpi, alpha=False)
+        mode = "RGB" if pix.n < 4 else "RGBA"
+        img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+        buf = _io.BytesIO()
+        img.save(buf, format="JPEG", quality=90)
+        data = buf.getvalue()
+        _image_page_cache[cache_key] = data
+        return data
+    except Exception:
+        return b""
+    finally:
+        try:
+            if doc:
+                doc.close()
+        except Exception:
+            pass
 
 
 def _vision_weak_pages(
     fitz_doc,
     weak_indices: list[int],
     provider,
+    file_hash: str | None = None,
 ) -> dict[int, str]:
     if not weak_indices or not provider:
         return {}
@@ -219,7 +270,7 @@ def _vision_weak_pages(
 
     cap = min(len(weak_indices), MAX_VISION_PAGES)
     target_indices = weak_indices[:cap]
-    images = _render_page_images(fitz_doc, target_indices)
+    images = _render_page_images(fitz_doc, target_indices, file_hash=file_hash)
     if not images:
         return {}
 
@@ -249,6 +300,7 @@ def _extract_direct(path: str) -> ParsedDocument:
     tables: list[ParsedTable] = []
     text = ""
 
+    fh = _file_hash(path)
     try:
         if ext in (".csv", ".tsv"):
             import pandas as pd
@@ -294,6 +346,7 @@ def _extract_direct(path: str) -> ParsedDocument:
         )
         return ParsedDocument(
             source_file=p.name,
+            file_hash=fh,
             mime_type=f"text/{ext.lstrip('.')}",
             full_text=text,
             page_count=1,
@@ -312,6 +365,7 @@ def _extract_direct(path: str) -> ParsedDocument:
 
 def _assemble(
     source_file: str,
+    file_hash: str,
     pages: list[ParsedPage],
     tables: list[ParsedTable],
     page_count: int,
@@ -342,6 +396,7 @@ def _assemble(
 
     return ParsedDocument(
         source_file=source_file,
+        file_hash=file_hash,
         mime_type="application/pdf",
         full_text=full_text,
         page_count=n,
@@ -458,7 +513,7 @@ def extract_fast(path: str, provider=None, ocr_semaphore=None) -> ParsedDocument
                 extraction_chain.append("ocr_escalated")
 
     result = _assemble(
-        p.name, pages, tables, page_count, extraction_chain,
+        p.name, cache_key, pages, tables, page_count, extraction_chain,
         [], ocr_pages_fast, [], warnings, errors,
     )
     _extraction_cache[f"fast:{cache_key}"] = result
@@ -570,7 +625,7 @@ def extract_deep(path: str, provider=None, ocr_semaphore=None) -> ParsedDocument
             )[:MAX_VISION_PAGES]
 
             if critical_indices and provider is not None:
-                vision_results = _vision_weak_pages(fitz_doc, critical_indices, provider)
+                vision_results = _vision_weak_pages(fitz_doc, critical_indices, provider, file_hash=fhash_deep)
                 if vision_results:
                     extraction_chain.append("vision")
                     for i, t in vision_results.items():
@@ -583,7 +638,7 @@ def extract_deep(path: str, provider=None, ocr_semaphore=None) -> ParsedDocument
                             vision_pages.append(pages[i].page_number)
 
     result = _assemble(
-        p.name, pages, tables, page_count, extraction_chain,
+        p.name, cache_key, pages, tables, page_count, extraction_chain,
         [], ocr_pages, vision_pages, warnings, errors,
     )
     _extraction_cache[f"deep:{cache_key}"] = result

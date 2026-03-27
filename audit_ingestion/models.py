@@ -1,5 +1,5 @@
 """
-audit_ingestion_v04/audit_ingestion/models.py
+audit_ingestion_v04.2/audit_ingestion/models.py
 Canonical audit evidence schema — Pydantic models.
 
 Two layers:
@@ -64,6 +64,7 @@ class ParsedDocument(BaseModel):
     Every page has its own text record and provenance.
     """
     source_file:      str
+    file_hash:        Optional[str] = None   # MD5 of file content — used for cache keying
     mime_type:        Optional[str] = None
     full_text:        str = ""           # Assembled from page texts
     page_count:       int = 0

@@ -1,5 +1,5 @@
 """
-audit_ingestion_v04/audit_ingestion/canonical.py
+audit_ingestion_v04.2/audit_ingestion/canonical.py
 Single AI canonical extraction pass.
 
 Uses OpenAI Structured Outputs / JSON Schema for reliable JSON.
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Keyed by file_hash + mode + model + schema_version
 _canonical_cache: dict[str, "AuditEvidence"] = {}
 
-SCHEMA_VERSION = "v04.0"  # Bump when schema changes to invalidate cache
+SCHEMA_VERSION = "v04.3"  # Bump when schema changes to invalidate cache
 
 # Keywords that indicate audit-relevant pages
 _AUDIT_KEYWORDS = {
@@ -495,11 +495,18 @@ def _parse_response(data: dict, source_file: str, parsed_doc: ParsedDocument,
 
 
 def _canonical_cache_key(parsed_doc: ParsedDocument, model: str) -> str:
-    """Build cache key for canonical result."""
+    """
+    Build canonical cache key.
+    Uses file_hash (MD5 of file content) when available — prevents collisions
+    between different files with same name/length.
+    Falls back to MD5 of full_text if file_hash not populated.
+    """
     import hashlib
+    base = parsed_doc.file_hash or hashlib.md5(
+        (parsed_doc.full_text or "").encode("utf-8", errors="ignore")
+    ).hexdigest()
     h = hashlib.md5()
-    h.update((parsed_doc.source_file + str(parsed_doc.page_count) +
-               str(len(parsed_doc.full_text)) + model + SCHEMA_VERSION).encode())
+    h.update(f"{base}:{model}:{SCHEMA_VERSION}".encode())
     return h.hexdigest()
 
 

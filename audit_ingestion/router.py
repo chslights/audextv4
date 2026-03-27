@@ -1,5 +1,5 @@
 """
-audit_ingestion_v04.2/audit_ingestion/router.py
+audit_ingestion_v04.2.2/audit_ingestion/router.py
 Pipeline orchestrator with per-stage timing and throttle semaphores.
 
 Throttle caps (conservative):
@@ -131,46 +131,59 @@ def ingest_one(
                 engine_chain.append("canonical_failed")
         stage_timings["canonical_ai"] = round(time.perf_counter() - t1, 3)
 
-        # Stage 3: Optional gpt-5.4-pro rescue on worst pages
-        # Only fires if: allow_rescue=True AND pages still critically weak
-        # NEVER used for canonical structured JSON
-        if allow_rescue and parsed_doc.weak_pages and hasattr(provider, "_responses_call"):
-            worst = sorted(parsed_doc.weak_pages)[:2]  # Top 2 worst only
-            if worst:
+
+        # Stage 3: Optional gpt-5.4-pro visual rescue on worst pages
+        # Uses page IMAGES via vision model — not weak text re-interpretation
+        # Selects pages by LOWEST char count (truly worst), not lowest page number
+        # Guarded by _AI_SEMAPHORE — respects global AI concurrency cap
+        # NEVER used for canonical structured JSON (always gpt-5.4 only)
+        if allow_rescue and parsed_doc.weak_pages and provider is not None:
+            worst_pages = sorted(
+                [p for p in parsed_doc.pages if p.page_number in parsed_doc.weak_pages],
+                key=lambda p: p.char_count   # lowest char count first = truly worst
+            )[:2]
+
+            if worst_pages:
                 t2 = time.perf_counter()
                 try:
                     from .providers.openai_provider import RESCUE_MODEL
                     rescue_texts = []
-                    for pg_num in worst:
-                        pg = next((p for p in parsed_doc.pages
-                                   if p.page_number == pg_num), None)
-                        if pg and pg.char_count < 200:
-                            rescue_prompt = (
-                                f"Read page {pg_num} of this document. "
-                                f"Extract all audit-relevant facts you can find. "
-                                f"Return plain text only.\n\nPage content:\n{pg.text[:2000]}"
-                            )
-                            rescued = provider._responses_call(
-                                system="You are a CPA auditor extracting facts from a document page.",
-                                user=rescue_prompt,
+
+                    with _AI_SEMAPHORE:
+                        for pg in worst_pages:
+                            img = render_page_image_cached(path, pg.page_number - 1, dpi=200)
+                            if not img:
+                                continue
+                            rescued = provider.extract_text_from_page_images(
+                                images=[img],
+                                prompt=(
+                                    f"Read page {pg.page_number} of this document image. "
+                                    f"Extract all audit-relevant facts you can find. "
+                                    f"Return plain text only."
+                                ),
                                 model=RESCUE_MODEL,
-                                max_output_tokens=1000,
                             )
                             if rescued and rescued.strip():
-                                rescue_texts.append(f"[Rescued page {pg_num}]\n{rescued.strip()}")
-                                engine_chain.append(f"rescue_p{pg_num}")
+                                rescue_texts.append(
+                                    f"[Rescued page {pg.page_number}]\n{rescued.strip()}"
+                                )
+                                engine_chain.append(f"rescue_p{pg.page_number}")
 
                     if rescue_texts:
-                        # Append rescued text to evidence as a flag/note
                         rescue_combined = "\n\n".join(rescue_texts)
                         evidence.flags.append(Flag(
                             type="rescue_applied",
-                            description=f"gpt-5.4-pro rescue applied to {len(rescue_texts)} page(s). "
-                                        f"Review rescued content in document_specific.",
+                            description=(
+                                f"gpt-5.4-pro visual rescue applied to {len(rescue_texts)} page(s). "
+                                f"Review rescued content in document_specific."
+                            ),
                             severity="info",
                         ))
                         evidence.document_specific["rescued_page_text"] = rescue_combined
 
+                    stage_timings["rescue"] = round(time.perf_counter() - t2, 3)
+                except Exception as e:
+                    logger.warning(f"Rescue pass failed: {e}")
                     stage_timings["rescue"] = round(time.perf_counter() - t2, 3)
                 except Exception as e:
                     logger.warning(f"Rescue pass failed: {e}")
