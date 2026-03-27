@@ -1,5 +1,5 @@
 """
-audit_ingestion_v03/audit_ingestion/models.py
+audit_ingestion_v04/audit_ingestion/models.py
 Canonical audit evidence schema — Pydantic models.
 
 Two layers:

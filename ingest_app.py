@@ -1,6 +1,6 @@
 """
-audit_ingestion_v03/ingest_app.py
-Audit Ingestion Pipeline v03 — Streamlit UI
+audit_ingestion_v04/ingest_app.py
+Audit Ingestion Pipeline v04 — Streamlit UI
 
 Canonical audit evidence view with extraction diagnostics.
 OpenAI only. One model selector. Full provenance display.
@@ -16,7 +16,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 st.set_page_config(
-    page_title="Audit Ingestion v03",
+    page_title="Audit Ingestion v04",
     page_icon="📋",
     layout="wide",
 )
@@ -104,7 +104,7 @@ def run_pipeline(uploaded_files, api_key, mode="fast", allow_rescue=False):
     status_text = st.empty()
     stage_area  = st.empty()
 
-    tmpdir = tempfile.mkdtemp(prefix="audit_v03_")
+    tmpdir = tempfile.mkdtemp(prefix="audit_v04_")
     Path(tmpdir, ".tmp").mkdir(exist_ok=True)
 
     # Write all files first
@@ -222,7 +222,7 @@ with st.sidebar:
     st.caption(f"Model: `gpt-5.4` | Mode: `{mode}`")
 
     st.markdown("---")
-    st.markdown("### 📋 v03 Architecture")
+    st.markdown("### 📋 v04 Architecture")
     st.markdown("""
 1. **Page-aware extraction**
    pdfplumber → PyPDF2 → extractous → OCR → vision
@@ -233,7 +233,7 @@ with st.sidebar:
 4. **Audit evidence object**
    Facts + Claims + Flags + Link Keys
     """)
-    st.caption("Audit Ingestion Pipeline v03")
+    st.caption("Audit Ingestion Pipeline v04")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -254,7 +254,7 @@ with c1:
                         disabled=not uploaded_files or not api_key)
 with c2:
     if st.button("🗑 Clear"):
-        st.session_state.pop("v03_results", None)
+        st.session_state.pop("v04_results", None)
         st.rerun()
 
 if not api_key and uploaded_files:
@@ -263,16 +263,16 @@ if not api_key and uploaded_files:
 if run_btn and uploaded_files and api_key:
     with st.spinner("Running page-aware extraction and canonical AI analysis..."):
         results, timings = run_pipeline(uploaded_files, api_key, mode, allow_rescue)
-    st.session_state["v03_results"] = [r.model_dump() for r in results]
-    st.session_state["v03_timings"] = timings
+    st.session_state["v04_results"] = [r.model_dump() for r in results]
+    st.session_state["v04_timings"] = timings
     st.rerun()
 
 
 # ── Results ───────────────────────────────────────────────────────────────────
-if "v03_results" not in st.session_state:
+if "v04_results" not in st.session_state:
     st.stop()
 
-raw_results = st.session_state["v03_results"]
+raw_results = st.session_state["v04_results"]
 
 # Metrics
 total   = len(raw_results)
@@ -320,7 +320,7 @@ def highlight(row):
     elif s == "PARTIAL": return ["background-color: #fffbeb"] * len(row)
     return ["background-color: #fef2f2"] * len(row)
 
-timings = st.session_state.get("v03_timings", {})
+timings = st.session_state.get("v04_timings", {})
 for row in summary_rows:
     fname = row.get("file", "")
     row["time_s"] = f"{timings.get(fname, 0):.1f}s"
@@ -335,7 +335,7 @@ st.dataframe(df[display_cols].style.apply(highlight, axis=1),
 
 st.download_button("⬇️ Export CSV",
                    data=df.to_csv(index=False),
-                   file_name="audit_evidence_v03.csv",
+                   file_name="audit_evidence_v04.csv",
                    mime="text/csv")
 
 st.markdown("---")

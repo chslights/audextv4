@@ -1,5 +1,5 @@
 """
-audit_ingestion_v03/audit_ingestion/providers/openai_provider.py
+audit_ingestion_v04/audit_ingestion/providers/openai_provider.py
 OpenAI provider — Responses API + Structured Outputs.
 
 Model constants — change here only:

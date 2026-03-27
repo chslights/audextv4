@@ -150,7 +150,7 @@ def test_image_cache_exists():
 
 def test_schema_version_defined():
     from audit_ingestion.canonical import SCHEMA_VERSION
-    assert SCHEMA_VERSION in ("v03.1", "v03.2")
+    assert SCHEMA_VERSION.startswith("v04")
 
 
 def test_canonical_cache_key_includes_schema_version():
@@ -324,7 +324,7 @@ def test_allow_rescue_false_by_default(tmp_path):
 def test_canonical_schema_version_bumped():
     """Schema version should be v03.2 after tightening."""
     from audit_ingestion.canonical import SCHEMA_VERSION
-    assert SCHEMA_VERSION == "v03.2"
+    assert SCHEMA_VERSION == "v04.0"
 
 
 def test_canonical_schema_nested_items_have_additional_properties():

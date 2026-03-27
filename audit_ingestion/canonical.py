@@ -1,5 +1,5 @@
 """
-audit_ingestion_v03/audit_ingestion/canonical.py
+audit_ingestion_v04/audit_ingestion/canonical.py
 Single AI canonical extraction pass.
 
 Uses OpenAI Structured Outputs / JSON Schema for reliable JSON.
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Keyed by file_hash + mode + model + schema_version
 _canonical_cache: dict[str, "AuditEvidence"] = {}
 
-SCHEMA_VERSION = "v03.2"  # Bump when schema changes to invalidate cache
+SCHEMA_VERSION = "v04.0"  # Bump when schema changes to invalidate cache
 
 # Keywords that indicate audit-relevant pages
 _AUDIT_KEYWORDS = {
