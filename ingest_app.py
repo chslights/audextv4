@@ -324,6 +324,9 @@ def highlight(row):
     return ["background-color: #fef2f2"] * len(row)
 
 timings = st.session_state.get("v042_timings", {})
+import os as _os
+_cache_dir = _os.path.join(_os.path.dirname(__file__), ".canonical_cache")
+
 for row in summary_rows:
     fname = row.get("file", "")
     row["time_s"] = f"{timings.get(fname, 0):.1f}s"
@@ -340,6 +343,22 @@ st.download_button("⬇️ Export CSV",
                    data=df.to_csv(index=False),
                    file_name="audit_evidence_v042.csv",
                    mime="text/csv")
+
+# Cache stats + clear button
+_cache_files = []
+if _os.path.isdir(_cache_dir):
+    _cache_files = [f for f in _os.listdir(_cache_dir) if f.endswith(".json")]
+
+_cc1, _cc2, _cc3 = st.columns([2, 2, 1])
+_cc1.caption(f"💾 Disk cache: **{len(_cache_files)}** result(s) stored")
+_cc2.caption("Re-uploading the same files will skip OpenAI and use cache.")
+with _cc3:
+    if st.button("🗑 Clear Cache", help="Delete all cached canonical results"):
+        import shutil as _shutil
+        if _os.path.isdir(_cache_dir):
+            _shutil.rmtree(_cache_dir)
+        st.success("Cache cleared.")
+        st.rerun()
 
 st.markdown("---")
 

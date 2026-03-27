@@ -21,7 +21,41 @@ logger = logging.getLogger(__name__)
 
 # ── Canonical result cache ────────────────────────────────────────────────────
 # Keyed by file_hash + mode + model + schema_version
+# Two levels: in-process memory (fast) + disk (survives restarts)
 _canonical_cache: dict[str, "AuditEvidence"] = {}
+
+import os as _os
+import json as _json
+
+_DISK_CACHE_DIR = _os.path.join(_os.path.dirname(__file__), "..", ".canonical_cache")
+
+def _disk_cache_path(cache_key: str) -> str:
+    _os.makedirs(_DISK_CACHE_DIR, exist_ok=True)
+    return _os.path.join(_DISK_CACHE_DIR, f"{cache_key}.json")
+
+def _load_from_disk(cache_key: str) -> "Optional[AuditEvidence]":
+    """Load a cached AuditEvidence from disk. Returns None if not found."""
+    path = _disk_cache_path(cache_key)
+    try:
+        if _os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                data = _json.load(f)
+            from .models import AuditEvidence
+            ev = AuditEvidence(**data)
+            _canonical_cache[cache_key] = ev  # warm memory cache too
+            return ev
+    except Exception as e:
+        logger.debug(f"Disk cache read failed for {cache_key}: {e}")
+    return None
+
+def _save_to_disk(cache_key: str, evidence: "AuditEvidence") -> None:
+    """Persist a canonical result to disk cache."""
+    path = _disk_cache_path(cache_key)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump(evidence.model_dump(), f)
+    except Exception as e:
+        logger.debug(f"Disk cache write failed for {cache_key}: {e}")
 
 SCHEMA_VERSION = "v04.6"  # Bump when schema changes to invalidate cache
 
@@ -592,12 +626,16 @@ def extract_canonical(
     Validates with Pydantic and retries once on failure.
     Caches result by file content + model + schema version.
     """
-    # Check cache
+    # Check in-memory cache first, then disk cache
     model_name = getattr(provider, "model", "unknown")
     cache_key = _canonical_cache_key(parsed_doc, model_name)
     if cache_key in _canonical_cache:
-        logger.info(f"Canonical cache hit: {parsed_doc.source_file}")
+        logger.info(f"Canonical memory cache hit: {parsed_doc.source_file}")
         return _canonical_cache[cache_key]
+    disk_hit = _load_from_disk(cache_key)
+    if disk_hit is not None:
+        logger.info(f"Canonical disk cache hit: {parsed_doc.source_file}")
+        return disk_hit
     meta = ExtractionMeta(
         primary_extractor=parsed_doc.primary_extractor,
         pages_processed=parsed_doc.page_count,
@@ -637,6 +675,7 @@ def extract_canonical(
         evidence = _parse_response(data, parsed_doc.source_file, parsed_doc, meta)
         meta.canonical_validated = True
         _canonical_cache[cache_key] = evidence
+        _save_to_disk(cache_key, evidence)
         return evidence
 
     except Exception as e:
@@ -659,6 +698,7 @@ def extract_canonical(
         meta.canonical_validated = True
         meta.canonical_retried = True
         _canonical_cache[cache_key] = evidence
+        _save_to_disk(cache_key, evidence)
         return evidence
 
     except Exception as e:
