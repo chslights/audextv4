@@ -19,7 +19,7 @@ from .extractor import extract
 from .normalizers import normalize_evidence
 
 logger = logging.getLogger(__name__)
-ROUTER_BUILD = "v04.3-providerfix-1"
+ROUTER_BUILD = "v04.4-schemafix-1"
 
 # ── Throttle semaphores ───────────────────────────────────────────────────────
 # Shared across all threads in the process — conservative caps for stability

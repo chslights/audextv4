@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Keyed by file_hash + mode + model + schema_version
 _canonical_cache: dict[str, "AuditEvidence"] = {}
 
-SCHEMA_VERSION = "v04.3"  # Bump when schema changes to invalidate cache
+SCHEMA_VERSION = "v04.4"  # Bump when schema changes to invalidate cache
 
 # Keywords that indicate audit-relevant pages
 _AUDIT_KEYWORDS = {
@@ -131,218 +131,248 @@ CANONICAL_JSON_SCHEMA = {
     "name": "audit_evidence",
     "strict": True,
     "schema": {
-        "additionalProperties": False,
         "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "family", "subtype", "title", "audit_overview",
+            "parties", "amounts", "dates", "identifiers", "assets",
+            "facts", "claims", "flags", "link_keys", "document_specific"
+        ],
         "properties": {
-            "family": {"type": "string"},
+            "family":  {"type": "string"},
             "subtype": {"type": ["string", "null"]},
-            "title": {"type": ["string", "null"]},
+            "title":   {"type": ["string", "null"]},
+
             "audit_overview": {
                 "type": "object",
+                "additionalProperties": False,
+                "required": ["summary", "audit_areas", "assertions", "period", "match_targets"],
                 "properties": {
-                    "summary": {"type": "string"},
-                    "audit_areas": {"type": "array", "items": {"type": "string"}},
-                    "assertions": {"type": "array", "items": {"type": "string"}},
+                    "summary":      {"type": "string"},
+                    "audit_areas":  {"type": "array", "items": {"type": "string"}},
+                    "assertions":   {"type": "array", "items": {"type": "string"}},
                     "period": {
                         "type": ["object", "null"],
+                        "additionalProperties": False,
                         "properties": {
                             "effective_date": {"type": ["string", "null"]},
-                            "start": {"type": ["string", "null"]},
-                            "end": {"type": ["string", "null"]},
-                            "term_months": {"type": ["integer", "null"]}
-                        }
+                            "start":          {"type": ["string", "null"]},
+                            "end":            {"type": ["string", "null"]},
+                            "term_months":    {"type": ["integer", "null"]}
+                        },
+                        "required": ["effective_date", "start", "end", "term_months"]
                     },
                     "match_targets": {"type": "array", "items": {"type": "string"}}
-                },
-                "required": ["summary", "audit_areas"]
+                }
             },
+
             "parties": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
+                    "required": ["role", "name", "normalized", "provenance"],
                     "properties": {
-                        "role": {"type": "string"},
-                        "name": {"type": "string"},
+                        "role":       {"type": "string"},
+                        "name":       {"type": "string"},
                         "normalized": {"type": "string"},
                         "provenance": {
                             "type": ["object", "null"],
+                            "additionalProperties": False,
                             "properties": {
-                                "page": {"type": ["integer", "null"]},
-                                "quote": {"type": ["string", "null"]},
+                                "page":       {"type": ["integer", "null"]},
+                                "quote":      {"type": ["string", "null"]},
                                 "confidence": {"type": "number"}
                             },
-                            "additionalProperties": False
+                            "required": ["page", "quote", "confidence"]
                         }
-                    },
-                    "required": ["role", "name", "normalized"]
+                    }
                 }
             },
+
             "amounts": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
+                    "required": ["type", "value", "currency", "provenance"],
                     "properties": {
-                        "type": {"type": "string"},
-                        "value": {"type": "number"},
+                        "type":     {"type": "string"},
+                        "value":    {"type": "number"},
                         "currency": {"type": "string"},
                         "provenance": {
                             "type": ["object", "null"],
+                            "additionalProperties": False,
                             "properties": {
-                                "page": {"type": ["integer", "null"]},
-                                "quote": {"type": ["string", "null"]},
+                                "page":       {"type": ["integer", "null"]},
+                                "quote":      {"type": ["string", "null"]},
                                 "confidence": {"type": "number"}
                             },
-                            "additionalProperties": False
+                            "required": ["page", "quote", "confidence"]
                         }
-                    },
-                    "required": ["type", "value"]
+                    }
                 }
             },
+
             "dates": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
+                    "required": ["type", "value", "provenance"],
                     "properties": {
-                        "type": {"type": "string"},
+                        "type":  {"type": "string"},
                         "value": {"type": "string"},
                         "provenance": {
                             "type": ["object", "null"],
+                            "additionalProperties": False,
                             "properties": {
-                                "page": {"type": ["integer", "null"]},
-                                "quote": {"type": ["string", "null"]},
+                                "page":       {"type": ["integer", "null"]},
+                                "quote":      {"type": ["string", "null"]},
                                 "confidence": {"type": "number"}
                             },
-                            "additionalProperties": False
+                            "required": ["page", "quote", "confidence"]
                         }
-                    },
-                    "required": ["type", "value"]
+                    }
                 }
             },
+
             "identifiers": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
+                    "required": ["type", "value", "provenance"],
                     "properties": {
-                        "type": {"type": "string"},
+                        "type":  {"type": "string"},
                         "value": {"type": "string"},
                         "provenance": {
                             "type": ["object", "null"],
+                            "additionalProperties": False,
                             "properties": {
-                                "page": {"type": ["integer", "null"]},
-                                "quote": {"type": ["string", "null"]},
+                                "page":       {"type": ["integer", "null"]},
+                                "quote":      {"type": ["string", "null"]},
                                 "confidence": {"type": "number"}
                             },
-                            "additionalProperties": False
+                            "required": ["page", "quote", "confidence"]
                         }
-                    },
-                    "required": ["type", "value"]
+                    }
                 }
             },
+
             "assets": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
+                    "required": ["type", "description", "value", "provenance"],
                     "properties": {
-                        "type": {"type": "string"},
+                        "type":        {"type": "string"},
                         "description": {"type": "string"},
-                        "value": {"type": ["number", "null"]},
+                        "value":       {"type": ["number", "null"]},
                         "provenance": {
                             "type": ["object", "null"],
+                            "additionalProperties": False,
                             "properties": {
-                                "page": {"type": ["integer", "null"]},
-                                "quote": {"type": ["string", "null"]},
+                                "page":       {"type": ["integer", "null"]},
+                                "quote":      {"type": ["string", "null"]},
                                 "confidence": {"type": "number"}
                             },
-                            "additionalProperties": False
+                            "required": ["page", "quote", "confidence"]
                         }
-                    },
-                    "required": ["type", "description"]
+                    }
                 }
             },
+
             "facts": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
+                    "required": ["label", "value", "provenance"],
                     "properties": {
                         "label": {"type": "string"},
                         "value": {"type": ["string", "number", "integer", "boolean", "null"]},
                         "provenance": {
                             "type": ["object", "null"],
+                            "additionalProperties": False,
                             "properties": {
-                                "page": {"type": ["integer", "null"]},
-                                "quote": {"type": ["string", "null"]},
+                                "page":       {"type": ["integer", "null"]},
+                                "quote":      {"type": ["string", "null"]},
                                 "confidence": {"type": "number"}
                             },
-                            "additionalProperties": False
+                            "required": ["page", "quote", "confidence"]
                         }
-                    },
-                    "required": ["label", "value"]
+                    }
                 }
             },
+
             "claims": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
+                    "required": ["statement", "audit_area", "basis_fact_labels", "provenance"],
                     "properties": {
-                        "statement": {"type": "string"},
-                        "audit_area": {"type": "string"},
+                        "statement":         {"type": "string"},
+                        "audit_area":        {"type": "string"},
                         "basis_fact_labels": {"type": "array", "items": {"type": "string"}},
                         "provenance": {
                             "type": ["object", "null"],
+                            "additionalProperties": False,
                             "properties": {
-                                "page": {"type": ["integer", "null"]},
-                                "quote": {"type": ["string", "null"]},
+                                "page":       {"type": ["integer", "null"]},
+                                "quote":      {"type": ["string", "null"]},
                                 "confidence": {"type": "number"}
                             },
-                            "additionalProperties": False
+                            "required": ["page", "quote", "confidence"]
                         }
-                    },
-                    "required": ["statement", "audit_area"]
+                    }
                 }
             },
+
             "flags": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
+                    "required": ["type", "description", "severity"],
                     "properties": {
-                        "type": {"type": "string"},
+                        "type":        {"type": "string"},
                         "description": {"type": "string"},
-                        "severity": {"type": "string", "enum": ["info", "warning", "critical"]}
-                    },
-                    "required": ["type", "description", "severity"]
+                        "severity":    {"type": "string", "enum": ["info", "warning", "critical"]}
+                    }
                 }
             },
+
             "link_keys": {
                 "type": "object",
                 "additionalProperties": False,
+                "required": [
+                    "party_names", "document_numbers", "agreement_numbers",
+                    "invoice_numbers", "asset_descriptions", "recurring_amounts",
+                    "key_dates", "other_ids"
+                ],
                 "properties": {
-                    "party_names": {"type": "array", "items": {"type": "string"}},
-                    "document_numbers": {"type": "array", "items": {"type": "string"}},
-                    "agreement_numbers": {"type": "array", "items": {"type": "string"}},
-                    "invoice_numbers": {"type": "array", "items": {"type": "string"}},
+                    "party_names":        {"type": "array", "items": {"type": "string"}},
+                    "document_numbers":   {"type": "array", "items": {"type": "string"}},
+                    "agreement_numbers":  {"type": "array", "items": {"type": "string"}},
+                    "invoice_numbers":    {"type": "array", "items": {"type": "string"}},
                     "asset_descriptions": {"type": "array", "items": {"type": "string"}},
-                    "recurring_amounts": {"type": "array", "items": {"type": "number"}},
-                    "key_dates": {"type": "array", "items": {"type": "string"}},
-                    "other_ids": {"type": "array", "items": {"type": "string"}}
-                },
-                "required": ["party_names", "document_numbers", "agreement_numbers",
-                             "invoice_numbers", "asset_descriptions", "recurring_amounts",
-                             "key_dates", "other_ids"]
+                    "recurring_amounts":  {"type": "array", "items": {"type": "number"}},
+                    "key_dates":          {"type": "array", "items": {"type": "string"}},
+                    "other_ids":          {"type": "array", "items": {"type": "string"}}
+                }
             },
-            "document_specific": {"type": "object"}
-        },
-        "required": ["family", "audit_overview", "parties", "amounts", "dates",
-                     "facts", "claims", "flags", "link_keys"]
+
+            "document_specific": {
+                "type": "object",
+                "additionalProperties": True
+            }
+        }
     }
 }
+
 
 CANONICAL_SYSTEM = """You are a senior CPA auditor extracting canonical audit evidence from financial documents.
 
