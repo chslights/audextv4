@@ -71,7 +71,7 @@ def test_image_cache_is_used():
 def test_version_strings_updated():
     """Schema version must be v04.3."""
     import audit_ingestion.canonical as c
-    assert c.SCHEMA_VERSION == "v04.4"
+    assert c.SCHEMA_VERSION == "v04.6"
 
 
 # Additional coverage for the same pass
@@ -145,13 +145,13 @@ def test_build_version_in_ingest_app():
     # Just check the file contains the constant
     with open("ingest_app.py") as f:
         src = f.read()
-    assert 'BUILD_VERSION = "v04.4-schemafix-1"' in src
+    assert 'BUILD_VERSION = "v04.6-schemafix-3"' in src
 
 
 def test_provider_build_constant():
     """PROVIDER_BUILD must be defined in openai_provider."""
     from audit_ingestion.providers.openai_provider import PROVIDER_BUILD
-    assert PROVIDER_BUILD == "v04.4-schemafix-1"
+    assert PROVIDER_BUILD == "v04.6-schemafix-3"
 
 
 def test_provider_has_preflight_assertion():

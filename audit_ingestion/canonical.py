@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Keyed by file_hash + mode + model + schema_version
 _canonical_cache: dict[str, "AuditEvidence"] = {}
 
-SCHEMA_VERSION = "v04.4"  # Bump when schema changes to invalidate cache
+SCHEMA_VERSION = "v04.6"  # Bump when schema changes to invalidate cache
 
 # Keywords that indicate audit-relevant pages
 _AUDIT_KEYWORDS = {
@@ -152,15 +152,20 @@ CANONICAL_JSON_SCHEMA = {
                     "audit_areas":  {"type": "array", "items": {"type": "string"}},
                     "assertions":   {"type": "array", "items": {"type": "string"}},
                     "period": {
-                        "type": ["object", "null"],
-                        "additionalProperties": False,
-                        "properties": {
-                            "effective_date": {"type": ["string", "null"]},
-                            "start":          {"type": ["string", "null"]},
-                            "end":            {"type": ["string", "null"]},
-                            "term_months":    {"type": ["integer", "null"]}
-                        },
-                        "required": ["effective_date", "start", "end", "term_months"]
+                        "anyOf": [
+                            {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["effective_date", "start", "end", "term_months"],
+                                "properties": {
+                                    "effective_date": {"type": ["string", "null"]},
+                                    "start":          {"type": ["string", "null"]},
+                                    "end":            {"type": ["string", "null"]},
+                                    "term_months":    {"type": ["integer", "null"]}
+                                }
+                            },
+                            {"type": "null"}
+                        ]
                     },
                     "match_targets": {"type": "array", "items": {"type": "string"}}
                 }
@@ -177,14 +182,19 @@ CANONICAL_JSON_SCHEMA = {
                         "name":       {"type": "string"},
                         "normalized": {"type": "string"},
                         "provenance": {
-                            "type": ["object", "null"],
-                            "additionalProperties": False,
-                            "properties": {
-                                "page":       {"type": ["integer", "null"]},
-                                "quote":      {"type": ["string", "null"]},
-                                "confidence": {"type": "number"}
-                            },
-                            "required": ["page", "quote", "confidence"]
+                            "anyOf": [
+                                {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["page", "quote", "confidence"],
+                                    "properties": {
+                                        "page":       {"type": ["integer", "null"]},
+                                        "quote":      {"type": ["string", "null"]},
+                                        "confidence": {"type": "number"}
+                                    }
+                                },
+                                {"type": "null"}
+                            ]
                         }
                     }
                 }
@@ -201,14 +211,19 @@ CANONICAL_JSON_SCHEMA = {
                         "value":    {"type": "number"},
                         "currency": {"type": "string"},
                         "provenance": {
-                            "type": ["object", "null"],
-                            "additionalProperties": False,
-                            "properties": {
-                                "page":       {"type": ["integer", "null"]},
-                                "quote":      {"type": ["string", "null"]},
-                                "confidence": {"type": "number"}
-                            },
-                            "required": ["page", "quote", "confidence"]
+                            "anyOf": [
+                                {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["page", "quote", "confidence"],
+                                    "properties": {
+                                        "page":       {"type": ["integer", "null"]},
+                                        "quote":      {"type": ["string", "null"]},
+                                        "confidence": {"type": "number"}
+                                    }
+                                },
+                                {"type": "null"}
+                            ]
                         }
                     }
                 }
@@ -221,17 +236,22 @@ CANONICAL_JSON_SCHEMA = {
                     "additionalProperties": False,
                     "required": ["type", "value", "provenance"],
                     "properties": {
-                        "type":  {"type": "string"},
-                        "value": {"type": "string"},
+                        "type":       {"type": "string"},
+                        "value":      {"type": "string"},
                         "provenance": {
-                            "type": ["object", "null"],
-                            "additionalProperties": False,
-                            "properties": {
-                                "page":       {"type": ["integer", "null"]},
-                                "quote":      {"type": ["string", "null"]},
-                                "confidence": {"type": "number"}
-                            },
-                            "required": ["page", "quote", "confidence"]
+                            "anyOf": [
+                                {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["page", "quote", "confidence"],
+                                    "properties": {
+                                        "page":       {"type": ["integer", "null"]},
+                                        "quote":      {"type": ["string", "null"]},
+                                        "confidence": {"type": "number"}
+                                    }
+                                },
+                                {"type": "null"}
+                            ]
                         }
                     }
                 }
@@ -244,17 +264,22 @@ CANONICAL_JSON_SCHEMA = {
                     "additionalProperties": False,
                     "required": ["type", "value", "provenance"],
                     "properties": {
-                        "type":  {"type": "string"},
-                        "value": {"type": "string"},
+                        "type":       {"type": "string"},
+                        "value":      {"type": "string"},
                         "provenance": {
-                            "type": ["object", "null"],
-                            "additionalProperties": False,
-                            "properties": {
-                                "page":       {"type": ["integer", "null"]},
-                                "quote":      {"type": ["string", "null"]},
-                                "confidence": {"type": "number"}
-                            },
-                            "required": ["page", "quote", "confidence"]
+                            "anyOf": [
+                                {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["page", "quote", "confidence"],
+                                    "properties": {
+                                        "page":       {"type": ["integer", "null"]},
+                                        "quote":      {"type": ["string", "null"]},
+                                        "confidence": {"type": "number"}
+                                    }
+                                },
+                                {"type": "null"}
+                            ]
                         }
                     }
                 }
@@ -270,15 +295,20 @@ CANONICAL_JSON_SCHEMA = {
                         "type":        {"type": "string"},
                         "description": {"type": "string"},
                         "value":       {"type": ["number", "null"]},
-                        "provenance": {
-                            "type": ["object", "null"],
-                            "additionalProperties": False,
-                            "properties": {
-                                "page":       {"type": ["integer", "null"]},
-                                "quote":      {"type": ["string", "null"]},
-                                "confidence": {"type": "number"}
-                            },
-                            "required": ["page", "quote", "confidence"]
+                        "provenance":  {
+                            "anyOf": [
+                                {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["page", "quote", "confidence"],
+                                    "properties": {
+                                        "page":       {"type": ["integer", "null"]},
+                                        "quote":      {"type": ["string", "null"]},
+                                        "confidence": {"type": "number"}
+                                    }
+                                },
+                                {"type": "null"}
+                            ]
                         }
                     }
                 }
@@ -291,17 +321,22 @@ CANONICAL_JSON_SCHEMA = {
                     "additionalProperties": False,
                     "required": ["label", "value", "provenance"],
                     "properties": {
-                        "label": {"type": "string"},
-                        "value": {"type": ["string", "number", "integer", "boolean", "null"]},
+                        "label":      {"type": "string"},
+                        "value":      {"type": ["string", "number", "integer", "boolean", "null"]},
                         "provenance": {
-                            "type": ["object", "null"],
-                            "additionalProperties": False,
-                            "properties": {
-                                "page":       {"type": ["integer", "null"]},
-                                "quote":      {"type": ["string", "null"]},
-                                "confidence": {"type": "number"}
-                            },
-                            "required": ["page", "quote", "confidence"]
+                            "anyOf": [
+                                {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["page", "quote", "confidence"],
+                                    "properties": {
+                                        "page":       {"type": ["integer", "null"]},
+                                        "quote":      {"type": ["string", "null"]},
+                                        "confidence": {"type": "number"}
+                                    }
+                                },
+                                {"type": "null"}
+                            ]
                         }
                     }
                 }
@@ -317,15 +352,20 @@ CANONICAL_JSON_SCHEMA = {
                         "statement":         {"type": "string"},
                         "audit_area":        {"type": "string"},
                         "basis_fact_labels": {"type": "array", "items": {"type": "string"}},
-                        "provenance": {
-                            "type": ["object", "null"],
-                            "additionalProperties": False,
-                            "properties": {
-                                "page":       {"type": ["integer", "null"]},
-                                "quote":      {"type": ["string", "null"]},
-                                "confidence": {"type": "number"}
-                            },
-                            "required": ["page", "quote", "confidence"]
+                        "provenance":        {
+                            "anyOf": [
+                                {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["page", "quote", "confidence"],
+                                    "properties": {
+                                        "page":       {"type": ["integer", "null"]},
+                                        "quote":      {"type": ["string", "null"]},
+                                        "confidence": {"type": "number"}
+                                    }
+                                },
+                                {"type": "null"}
+                            ]
                         }
                     }
                 }
@@ -367,7 +407,9 @@ CANONICAL_JSON_SCHEMA = {
 
             "document_specific": {
                 "type": "object",
-                "additionalProperties": True
+                "additionalProperties": False,
+                "required": [],
+                "properties": {}
             }
         }
     }
