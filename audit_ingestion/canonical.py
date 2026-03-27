@@ -57,7 +57,7 @@ def _save_to_disk(cache_key: str, evidence: "AuditEvidence") -> None:
     except Exception as e:
         logger.debug(f"Disk cache write failed for {cache_key}: {e}")
 
-SCHEMA_VERSION = "v04.6"  # Bump when schema changes to invalidate cache
+SCHEMA_VERSION = "v04.7"  # Bump when schema changes to invalidate cache
 
 # Keywords that indicate audit-relevant pages
 _AUDIT_KEYWORDS = {
@@ -465,6 +465,8 @@ RULES:
 8. link_keys must be populated — these drive future matching.
 9. Use null for any field you cannot confidently extract.
 10. document_specific holds extras beyond the universal schema.
+11. For bank statements and high-transaction documents: include summary amounts only (beginning balance, ending balance, total deposits, total withdrawals, total fees) in amounts[]. Do NOT list every individual transaction as a separate fact or amount — summarize instead. Include account number and statement period in identifiers[]. Keep facts[] to ≤10 most audit-critical items.
+12. Keep the total JSON response as concise as possible while capturing all audit-critical information. Quality over quantity.
 
 DOCUMENT FAMILY OPTIONS:
 contract_agreement | invoice_receipt | payment_proof | bank_cash_activity |
@@ -670,6 +672,7 @@ def extract_canonical(
             system=CANONICAL_SYSTEM,
             user=user_prompt,
             json_schema=CANONICAL_JSON_SCHEMA,
+            max_tokens=16000,
         )
         data = raw if isinstance(raw, dict) else json.loads(raw)
         evidence = _parse_response(data, parsed_doc.source_file, parsed_doc, meta)
@@ -692,6 +695,7 @@ def extract_canonical(
             system=CANONICAL_SYSTEM,
             user=repair_prompt,
             json_schema=CANONICAL_JSON_SCHEMA,
+            max_tokens=16000,
         )
         data = raw if isinstance(raw, dict) else json.loads(raw)
         evidence = _parse_response(data, parsed_doc.source_file, parsed_doc, meta)

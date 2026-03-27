@@ -11,7 +11,7 @@ Model constants — change here only:
 NOTE: If gpt-5.4 is not yet available on your account, swap CANONICAL_MODEL
 to "gpt-4o". The Responses API format is identical regardless of model.
 
-PROVIDER BUILD: v04.6-schemafix-3
+PROVIDER BUILD: v04.7-tokenfix-2
 """
 from __future__ import annotations
 import base64
@@ -32,7 +32,7 @@ VISION_MODEL    = "gpt-5.4"
 RESCUE_MODEL    = "gpt-5.4-pro"
 DEFAULT_MODEL   = CANONICAL_MODEL
 
-PROVIDER_BUILD  = "v04.6-schemafix-3"
+PROVIDER_BUILD  = "v04.7-tokenfix-2"
 
 try:
     import openai

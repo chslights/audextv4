@@ -163,20 +163,32 @@ def _load_fitz_doc(path: str):
 
 def _ocr_page(fitz_doc, page_index: int, dpi: int = 250,
               cache_key_prefix: str = "") -> str:
-    """OCR a single page. Uses in-process cache keyed by file+page."""
-    ck = f"{cache_key_prefix}:{page_index}:{dpi}"
+    """
+    OCR a single page. Uses in-process cache keyed by file+page.
+    Strategy: psm 6 (uniform block) first — better for tables and forms.
+    Falls back to psm 11 (sparse text) if psm 6 yields less content.
+    Uses 300 DPI for best table extraction quality.
+    """
+    ocr_dpi = max(dpi, 300)  # Always use at least 300 DPI for OCR
+    ck = f"{cache_key_prefix}:{page_index}:{ocr_dpi}"
     if ck in _ocr_page_cache:
         return _ocr_page_cache[ck]
     try:
         import pytesseract
         from PIL import Image
         page = fitz_doc[page_index]
-        pix = page.get_pixmap(dpi=dpi, alpha=False)
+        pix = page.get_pixmap(dpi=ocr_dpi, alpha=False)
         mode = "RGB" if pix.n < 4 else "RGBA"
         img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
-        text = pytesseract.image_to_string(img, lang="eng", config="--oem 1 --psm 11")
-        if len(text.strip()) < 100:
-            text = pytesseract.image_to_string(img, lang="eng", config="--oem 1 --psm 6")
+
+        # psm 6 = uniform block — better for table/form layouts (invoices, leases, schedules)
+        text_psm6 = pytesseract.image_to_string(img, lang="eng", config="--oem 1 --psm 6")
+        # psm 11 = sparse text — better for loose/mixed layouts
+        text_psm11 = pytesseract.image_to_string(img, lang="eng", config="--oem 1 --psm 11")
+
+        # Pick whichever produced more content
+        text = text_psm6 if len(text_psm6.strip()) >= len(text_psm11.strip()) else text_psm11
+
         if ck:
             _ocr_page_cache[ck] = text
         return text
@@ -488,10 +500,16 @@ def extract_fast(path: str, provider=None, ocr_semaphore=None) -> ParsedDocument
         logger.info(f"Fast mode critically weak ({avg_cpp:.0f} chars/page) — escalating weak pages to OCR")
         fitz_doc_fast = _load_fitz_doc(path)
         if fitz_doc_fast:
-            critical_indices = sorted(
-                [i for i, pg in enumerate(pages) if pg.char_count < MIN_CHARS_CRITICAL],
+            # Always OCR first 2 pages (most likely to contain key terms/header info)
+            # Then fill remaining slots with lowest-char pages
+            priority_indices = [i for i in [0, 1] if i < len(pages)
+                                and pages[i].char_count < MIN_CHARS_CRITICAL]
+            remaining_critical = sorted(
+                [i for i, pg in enumerate(pages)
+                 if pg.char_count < MIN_CHARS_CRITICAL and i not in priority_indices],
                 key=lambda i: pages[i].char_count,
-            )[:MAX_OCR_PAGES]
+            )
+            critical_indices = (priority_indices + remaining_critical)[:MAX_OCR_PAGES]
 
             ocr_used = False
             fhash = _file_hash(path)
@@ -511,6 +529,26 @@ def extract_fast(path: str, provider=None, ocr_semaphore=None) -> ParsedDocument
                     ocr_used = True
             if ocr_used:
                 extraction_chain.append("ocr_escalated")
+
+    # Cleanup pass — OCR any pages still critical after the main escalation
+    # This catches pages that were bumped by the MAX_OCR_PAGES cap
+    still_critical = [
+        i for i, pg in enumerate(pages)
+        if pg.char_count < MIN_CHARS_CRITICAL and pg.page_number not in ocr_pages_fast
+    ]
+    if still_critical and fitz_doc_fast:
+        fhash2 = _file_hash(path)
+        for i in still_critical[:3]:  # Cap cleanup at 3 additional pages
+            t = _ocr_page(fitz_doc_fast, i, cache_key_prefix=fhash2)
+            if len(t.strip()) > pages[i].char_count:
+                pages[i] = ParsedPage(
+                    page_number=pages[i].page_number, text=t,
+                    char_count=len(t), extractor="ocr",
+                    confidence=0.75, image_used=True,
+                )
+                ocr_pages_fast.append(pages[i].page_number)
+        if still_critical:
+            extraction_chain.append("ocr_cleanup")
 
     result = _assemble(
         p.name, cache_key, pages, tables, page_count, extraction_chain,
@@ -589,11 +627,16 @@ def extract_deep(path: str, provider=None, ocr_semaphore=None) -> ParsedDocument
                 ]
                 page_count = len(pages)
 
-    # OCR — shared fitz doc, top weak pages only
-    weak_indices = sorted(
-        [i for i, pg in enumerate(pages) if pg.char_count < MIN_CHARS_WEAK],
+    # OCR — shared fitz doc, weak pages
+    # Always prioritize first 2 pages (most likely to contain key terms/header)
+    # then fill remaining slots by lowest char count
+    _weak_all = [i for i, pg in enumerate(pages) if pg.char_count < MIN_CHARS_WEAK]
+    _priority  = [i for i in [0, 1] if i in _weak_all]
+    _remaining = sorted(
+        [i for i in _weak_all if i not in _priority],
         key=lambda i: pages[i].char_count,
-    )[:MAX_OCR_PAGES]
+    )
+    weak_indices = (_priority + _remaining)[:MAX_OCR_PAGES]
 
     if weak_indices:
         fitz_doc = _load_fitz_doc(path)
@@ -617,6 +660,28 @@ def extract_deep(path: str, provider=None, ocr_semaphore=None) -> ParsedDocument
 
             if ocr_used:
                 extraction_chain.append("ocr")
+
+            # Cleanup pass — OCR any pages still critical after the main pass
+            still_critical = [
+                i for i, pg in enumerate(pages)
+                if pg.char_count < MIN_CHARS_CRITICAL
+                and pg.page_number not in ocr_pages
+            ]
+            for i in still_critical[:3]:
+                if ocr_semaphore:
+                    with ocr_semaphore:
+                        t = _ocr_page(fitz_doc, i, cache_key_prefix=fhash_deep)
+                else:
+                    t = _ocr_page(fitz_doc, i, cache_key_prefix=fhash_deep)
+                if len(t.strip()) > pages[i].char_count:
+                    pages[i] = ParsedPage(
+                        page_number=pages[i].page_number, text=t,
+                        char_count=len(t), extractor="ocr",
+                        confidence=0.75, image_used=True,
+                    )
+                    ocr_pages.append(pages[i].page_number)
+            if still_critical:
+                extraction_chain.append("ocr_cleanup")
 
             # Vision — still critical after OCR, top pages only
             critical_indices = sorted(

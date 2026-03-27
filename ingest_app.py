@@ -15,7 +15,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-BUILD_VERSION = "v04.6-schemafix-3"
+BUILD_VERSION = "v04.7-tokenfix-2"
 
 st.set_page_config(
     page_title="Audit Ingestion v04.2",
